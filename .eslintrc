@@ -1,0 +1,13 @@
+{
+  "env": {
+    "es6": true,
+    "browser": true,
+    "node": true
+  },
+  "rules": {
+    "indent": ["error", "tab"],
+    "camelcase": 1,
+    "comma-dangle": 2,
+    "quotes": 0
+  }
+}
