@@ -141,7 +141,7 @@ const useref = () => {
 
 const deploy =  () => {
   return src(config.build.dist,  { base: config.build.dist })
-    .pipe(deploy())
+    .pipe(plugins.ghPages())
 }
 
 const compile = parallel(styles, pages, scripts);
@@ -159,4 +159,5 @@ module.exports = {
   serve,
   lint,
   start,
+  deploy
 }
