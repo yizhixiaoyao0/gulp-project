@@ -139,8 +139,8 @@ const useref = () => {
     .pipe(dest(config.build.dist))
 }
 
-const deploy =  () => {
-  return src(config.build.dist,  { base: config.build.dist })
+const deployFile =  () => {
+  return src('**/*',  { base: config.build.dist, cwd: config.build.dist })
     .pipe(plugins.ghPages())
 }
 
@@ -152,6 +152,7 @@ const build = series(clean, parallel(series(compile, useref), extra, images, fon
 
 const lint = parallel(elintJs, sassLintFile);
 
+const deploy = series(build, deployFile);
 
 module.exports = {
   clean,
