@@ -3,11 +3,13 @@ const {src, dest, watch, series, parallel} = require('gulp');
 const path = require('path');
 const cwd = process.cwd();
 
+const del = require('del')
+const browserSync = require('browser-sync');
+
 const loadPlugins = require('gulp-load-plugins');
 
 const plugins = loadPlugins()
 
-const browserSync = require('browser-sync');
 const bs = browserSync.create();
 
 // 若项目没有配置文件 则读取默认配置
@@ -27,6 +29,47 @@ let config = {
   }
 };
 
+const data = {
+  menus: [
+    {
+      name: 'Home',
+      icon: 'aperture',
+      link: 'index.html'
+    },
+    {
+      name: 'Features',
+      link: 'features.html'
+    },
+    {
+      name: 'About',
+      link: 'about.html'
+    },
+    {
+      name: 'Contact',
+      link: '#',
+      children: [
+        {
+          name: 'Twitter',
+          link: 'https://twitter.com/w_zce'
+        },
+        {
+          name: 'About',
+          link: 'https://weibo.com/zceme'
+        },
+        {
+          name: 'divider'
+        },
+        {
+          name: 'About',
+          link: 'https://github.com/zce'
+        }
+      ]
+    }
+  ],
+  pkg: require('./package.json'),
+  date: new Date()
+}
+
 try {
   const loadConfig = path.join(cwd, './page.config.js');
   config = Object.assign({}, config, loadConfig);
@@ -38,6 +81,7 @@ const styles = () => {
   return src(config.build.paths.styles, {base: config.build.src, cwd: config.build.src})
     .pipe(plugins.sass({outputStyle:'expended'}))
     .pipe(dest(config.build.temp))
+    .pipe(bs.reload({ stream: true }))
 }
 
 const scripts = () => {
@@ -46,12 +90,12 @@ const scripts = () => {
       presets: [require('@babel/preset-env')]
     }))
     .pipe(dest(config.build.temp))
-    .pipe(bs.reload({stream: true}));
+    .pipe(bs.reload({stream: true}))
 }
 
 const pages = () => {
   return src(config.build.paths.pages, {base: config.build.src, cwd: config.build.src})
-  .pipe(plugins.swig({data: config.data}))
+  .pipe(plugins.swig({data, defaults: { cache: false } }))
   .pipe(dest(config.build.temp))
 }
 
@@ -73,25 +117,26 @@ const extra = () => {
     .pipe(dest(config.build.dist))
 }
 
-const del = require('del');
-
 const clean = () => {
   return del([config.build.dist, config.build.temp])
 }
 
-const serve = () => {
+const serveBS = () => {
   watch(config.build.paths.styles, {cwd: config.build.src},  styles);
   watch(config.build.paths.scripts, {cwd: config.build.src}, scripts);
   watch(config.build.paths.pages, {cwd: config.build.src},  pages);
   watch([config.build.paths.images, config.build.paths.fonts], {cwd: config.build.src}, bs.reload);
   watch(["**"], {cwd: config.build.public}, bs.reload);
 
+
   bs.init({
     notify: false,
-    port: 2000,
-    open: true,
+    port: 2080,
+    debugInfo:false,
+    // logSnippet: false,
     serve: {
-      baseDir: [config.build.temp, config.build.dist, config.build.src, config.build.public],
+      baseDir: [config.build.temp, config.build.src, config.build.public],
+      index: config.build.temp+ 'index.html',
       routes: {
         '/node_modules': 'node_modules',
       }
@@ -144,9 +189,21 @@ const deployFile =  () => {
     .pipe(plugins.ghPages())
 }
 
+const production = (done) => {
+  process.env.NODE_ENV = 'production';
+  done();
+}
+
+const development = (done) => {
+  process.env.NODE_ENV = 'development';
+  done();
+}
+
 const compile = parallel(styles, pages, scripts);
 
-const start = series(compile, serve);
+const start = series(production, compile, serveBS);
+
+const serve = series(compile, serveBS)
 
 const build = series(clean, parallel(series(compile, useref), extra, images, fonts));
 

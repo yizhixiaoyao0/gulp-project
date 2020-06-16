@@ -1,8 +1,52 @@
 
 const loadGruntTasks = require('load-grunt-tasks');
 const mozjpeg = require('imagemin-mozjpeg');
+const browserSync = require('browser-sync');
+const bs = browserSync.create();
+
+
 
 module.exports = grunt => {
+  const data = {
+    menus: [
+      {
+        name: 'Home',
+        icon: 'aperture',
+        link: 'index.html'
+      },
+      {
+        name: 'Features',
+        link: 'features.html'
+      },
+      {
+        name: 'About',
+        link: 'about.html'
+      },
+      {
+        name: 'Contact',
+        link: '#',
+        children: [
+          {
+            name: 'Twitter',
+            link: 'https://twitter.com/w_zce'
+          },
+          {
+            name: 'About',
+            link: 'https://weibo.com/zceme'
+          },
+          {
+            name: 'divider'
+          },
+          {
+            name: 'About',
+            link: 'https://github.com/zce'
+          }
+        ]
+      }
+    ],
+    pkg: require('./package.json'),
+    date: new Date()
+  }
 
   grunt.initConfig({
     clean: {
@@ -46,6 +90,9 @@ module.exports = grunt => {
       }
     },
     uglify: {
+      options: {
+        mangle: true
+      },
       main: {
         files: [{
           expand: true,
@@ -91,17 +138,46 @@ module.exports = grunt => {
         }]
       }
     },
+    htmlmin: {                                     // Task
+      dist: {                                      // Target
+        options: {                                 // Target options
+          removeComments: true,
+          collapseWhitespace: true
+        },
+        files: [{                                   // Dictionary of files
+          expand: true,
+          cwd: 'build/temp/',
+          src: ['*.html'],
+          dest: 'build/dist/'
+        }]
+      }
+    },
     useminPrepare: {
-      html: ['build/temp/*.html'],
+      html: ['build/temp/index.html'],
       options: {
         dest: 'build/dist/',
         flow: {
-          html: {
-            steps: {
-              js: ['uglify'],
-              css: ['cssmin']
-            },
-            post: {}
+          steps: {
+            js: ['uglify'], css: ['cssmin']
+          },
+          post: {
+            js: [{
+              name: 'uglify:generated',
+              createConfig: function (context, block) {
+                console.log(context, 'context')
+                var generated = context.options.generated;
+                let files = [];
+                generated.files.map(item => {
+                  let src = [];
+                  item.src.map(path => {
+                    src.push(path.replace(/build\\temp\\node_modules/g, 'node_modules'));
+                  })
+                  item.src = src;
+                  files.push(item)
+                })
+                generated.files = files
+              }
+            }]
           }
         }
       }
@@ -109,43 +185,80 @@ module.exports = grunt => {
     usemin: {
       html: ['build/dist/*.html'],
       options: {
-        assetsDirs: ['build/dist/assets/scripts/','build/dist/assets/styles/']
+        assetsDirs: ['build/dist/', 'build/dist/assets/scripts/', 'build/dist/assets/styles/']
       }
     },
     copy: {
-      html: {
+      public: {
         expand: true,                   // 需要该参数
-        cwd: 'build/temp/',
-        src: ['*.html'],         // 会把tpl文件夹+文件复制过去
-        dest: 'build/dist/'
+        cwd: 'public/',
+        src: ['**/*'],         // 会把tpl文件夹+文件复制过去
+        dest: 'build/dist/public'
+      }
+    },
+    // lint
+    sasslint: {
+      options: {
+        configFile: '.sass-lint.yml',
+      },
+      target: ['src/assets/styles/**/*.scss']
+    },
+    eslint: {
+      options: {
+        configFile: '.eslintrc',
+      },
+      target: ['src/assets/scripts/**/*.js']
+    },
+    // gh-page
+    ghPages: {
+      options: {
+        base: 'build/dist'
+      },
+      src: '**/*'
+    },
+    browserSync: {
+      dev: {
+        bsFiles: {
+          src: ['**/*'],
+        },
+        options: {
+          port: 8080,
+          watchTask: true,
+          serve: {
+            baseDir: ['build/temp', 'src', 'public'],
+            routes: {
+              '/node_modules': 'node_modules',
+            }
+          }
+        }
       }
     },
     // 检测改变，自动跑sass任务
     watch: {
       css: {
         files: ['src/assets/styles/*.scss'],
-        tasks: ['sass'],
+        tasks: ['sass', bs.reload],
         options: {
           spawn: false
         }
       },
       js: {
         files: ['src/assets/scripts/*.js'],
-        tasks: ['babel'],
+        tasks: ['babel', bs.reload],
         options: {
           spawn: false
         }
       },
       page: {
         files: ['src/*.html'],
-        tasks: ['swigtemplates'],
+        tasks: ['swigtemplates', bs.reload],
         options: {
           spawn: false
         }
       },
       img: {
         files: ['src/assets/image/**/*', 'src/assets/fonts/**/*'],
-        tasks: ['swigtemplates'],
+        tasks: ['swigtemplates', bs.reload],
         options: {
           spawn: false
         }
@@ -153,8 +266,29 @@ module.exports = grunt => {
     }
   })
 
+
+  grunt.registerTask('production', () => {
+    process.env.NODE_ENV = 'production';
+  })
+
+  grunt.registerTask('development', () => {
+    process.env.NODE_ENV = 'development';
+  })
+
+
   loadGruntTasks(grunt);
-  grunt.registerTask('default', ['clean', 'sass', 'babel', 'swigtemplates', 'imagemin', 'watch'])
-  grunt.registerTask('build', ['clean', 'sass', 'babel', 'swigtemplates', 'imagemin',
-  'useminPrepare','copy', 'uglify:main', 'cssmin', 'usemin'])
+
+  grunt.registerTask('compile', ['clean', 'sass', 'babel', 'swigtemplates', 'imagemin', 'copy'])
+
+  grunt.registerTask('start', ['production', 'compile', 'browserSync', 'watch']);
+
+  grunt.registerTask('build', ['compile', 'useminPrepare', 'htmlmin', 'uglify', 'cssmin', 'usemin']);
+
+  grunt.registerTask('serve', ['development', 'compile', 'browserSync', 'watch']);
+
+  grunt.registerTask('lint', ['eslint', 'sasslint']);
+
+  grunt.registerTask('deploy', ['ghPages']);
+
+
 }
